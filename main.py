@@ -1,10 +1,11 @@
 import json
 from hashlib import sha256
 from time import time
+from random import randint
 
 
 pool = []
-prefix_zeros = 4
+difficulty = 4
 block_chain = []
 MAX_NONCE = 1000000
 
@@ -19,126 +20,116 @@ def new_transaction(sender, receiver, amount):
     pool.append(transaction)
 
 
-def mine(previous_hash):
+def mine():
+    previous_hash = 'root'
+    if len(block_chain) > 0:
+        previous_hash = block_chain[-1]['hash']
+
     block = {
-        'payload': [p for p in pool],
-        'previous_hash': previous_hash,
-        'nonce': 0
+        'header': {
+            'merkle_root': get_merkle_root(pool),
+            'previous_hash': previous_hash,
+            'difficulty': difficulty
+        },
+        'transactions': [p for p in pool]
     }
     pool.clear()
     for nonce in range(MAX_NONCE):
-        block['nonce'] = nonce
-        current_hash = sha256(json.dumps(block).encode()).hexdigest()
-        if current_hash.startswith('0'*prefix_zeros):
+        block['header']['nonce'] = nonce
+        current_hash = sha256(json.dumps(block['header']).encode()).hexdigest()
+        if current_hash.startswith('0'*difficulty):
             break
     else:
         raise Exception('Unable to find nonce')
 
     block['hash'] = current_hash
     block_chain.append(block)
+    print_block_data(block)
 
 
-def insert_test_transactions_1():
-    new_transaction('p1', 'p2', 10)
-    new_transaction('p3', 'p4', 5)
-    new_transaction('p5', 'p6', 15)
-    new_transaction('p2', 'p5', 53)
-    new_transaction('p4', 'p6', 45)
+def print_blockchain_data():
+    for block in block_chain:
+        print_block_data(block)
 
 
-def insert_test_transactions_2():
-    new_transaction('p4', 'p2', 2)
-    new_transaction('p1', 'p6', 6)
-    new_transaction('p3', 'p2', 51)
-    new_transaction('p4', 'p1', 97)
-    new_transaction('p6', 'p1', 46)
+def print_block_data(block):
+    print(f'hash: {block["hash"]} | nonce: {block["header"]["nonce"]}')
+
+
+def get_merkle_root(transactions):
+    transaction_hashes = [sha256(json.dumps(t).encode()).hexdigest() for t in transactions]
+    return merkle(transaction_hashes)
+
+
+def merkle(hash_list):
+    if len(hash_list) == 1:
+        return hash_list[0]
+    new_hash_list = []
+    for i in range(0, len(hash_list)-1, 2):
+        new_hash_list.append(hash_pair(hash_list[i], hash_list[i+1]))
+    if len(hash_list) % 2 == 1:
+        new_hash_list.append(hash_pair(hash_list[-1], hash_list[-1]))
+    return merkle(new_hash_list)
+
+
+def hash_pair(a, b):
+    return sha256((a+b).encode()).hexdigest()
+
+
+def insert_test_transactions(n):
+    for _ in range(n):
+        new_transaction(f'p{randint(1,50)}', f'p{randint(1,50)}', randint(1, 100))
+
+
+def validate():
+    last_hash = 'root'
+    for block in block_chain:
+        merkle_root = get_merkle_root(block['transactions'])
+        if merkle_root != block['header']['merkle_root']:
+            raise Exception('Merkle root has been tampered')
+
+        temporary_header = {
+            'merkle_root': block['header']['merkle_root'],
+            'previous_hash': last_hash,
+            'difficulty': block['header']['difficulty'],
+            'nonce': block['header']['nonce']
+        }
+        block_hash = sha256(json.dumps(temporary_header).encode()).hexdigest()
+        if block_hash != block['hash']:
+            raise Exception(f'Block hash has been tampered! {block_hash} != {block["hash"]}')
+        last_hash = block['hash']
+    print('Blockchain is valid')
+
+
+def create_test_chain():
+    insert_test_transactions(1)
+    mine()
+
+    insert_test_transactions(50)
+    mine()
+
+    insert_test_transactions(500)
+    mine()
+
+    insert_test_transactions(1000)
+    mine()
+
+    insert_test_transactions(5000)
+    mine()
+
+
+def find_new_hash(block):
+    for nonce in range(MAX_NONCE):
+        block['header']['nonce'] = nonce
+        current_hash = sha256(json.dumps(block['header']).encode()).hexdigest()
+        if current_hash.startswith('0'*difficulty):
+            break
+    else:
+        raise Exception('Unable to find nonce')
+
+    block['hash'] = current_hash
 
 
 if __name__ == '__main__':
-    insert_test_transactions_1()
-    mine('root')
-
-    insert_test_transactions_2()
-    mine(block_chain[-1]['hash'])
-    print([block['nonce'] for block in block_chain])
-    print([block['hash'] for block in block_chain])
-
-
-'''
-[
-   {
-      "payload":[
-         {
-            "sender":"p1",
-            "receiver":"p2",
-            "amount":10,
-            "timestamp":1625416940.2877693
-         },
-         {
-            "sender":"p3",
-            "receiver":"p4",
-            "amount":5,
-            "timestamp":1625416940.2877693
-         },
-         {
-            "sender":"p5",
-            "receiver":"p6",
-            "amount":15,
-            "timestamp":1625416940.2877693
-         },
-         {
-            "sender":"p2",
-            "receiver":"p5",
-            "amount":53,
-            "timestamp":1625416940.2877693
-         },
-         {
-            "sender":"p4",
-            "receiver":"p6",
-            "amount":45,
-            "timestamp":1625416940.2877693
-         }
-      ],
-      "previous_hash":"root",
-      "nonce":21317,
-      "hash":"0000f83abad9ab2624511c5c6d3068b5128d977d529338e2a35f4b4500b2792e"
-   },
-   {
-      "payload":[
-         {
-            "sender":"p4",
-            "receiver":"p2",
-            "amount":2,
-            "timestamp":1625416940.6089392
-         },
-         {
-            "sender":"p1",
-            "receiver":"p6",
-            "amount":6,
-            "timestamp":1625416940.6089392
-         },
-         {
-            "sender":"p3",
-            "receiver":"p2",
-            "amount":51,
-            "timestamp":1625416940.6089392
-         },
-         {
-            "sender":"p4",
-            "receiver":"p1",
-            "amount":97,
-            "timestamp":1625416940.6089392
-         },
-         {
-            "sender":"p6",
-            "receiver":"p1",
-            "amount":46,
-            "timestamp":1625416940.6089392
-         }
-      ],
-      "previous_hash":"0000f83abad9ab2624511c5c6d3068b5128d977d529338e2a35f4b4500b2792e",
-      "nonce":157202,
-      "hash":"0000cfd3eb82c7c2989408c51f1d7df32e7fc25439e4f52774a527f978a6a9eb"
-   }
-]
-'''
+    create_test_chain()
+    validate()
