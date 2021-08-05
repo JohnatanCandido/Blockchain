@@ -21,7 +21,7 @@ def new_transaction(sender, receiver, amount):
 
 
 def mine():
-    previous_hash = 'root'
+    previous_hash = '0000000000000000000000000000000000000000000000000000000000000000'
     if len(block_chain) > 0:
         previous_hash = block_chain[-1]['hash']
 
@@ -34,17 +34,23 @@ def mine():
         'transactions': [p for p in pool]
     }
     pool.clear()
+    find_valid_hash(block)
+    block_chain.append(block)
+    print_block_data(block)
+
+
+def find_valid_hash(block):
+    t = time()
     for nonce in range(MAX_NONCE):
         block['header']['nonce'] = nonce
         current_hash = sha256(json.dumps(block['header']).encode()).hexdigest()
         if current_hash.startswith('0'*difficulty):
+            print(f'Found hash in {time() - t} seconds')
             break
     else:
         raise Exception('Unable to find nonce')
 
     block['hash'] = current_hash
-    block_chain.append(block)
-    print_block_data(block)
 
 
 def print_blockchain_data():
@@ -53,7 +59,12 @@ def print_blockchain_data():
 
 
 def print_block_data(block):
-    print(f'hash: {block["hash"]} | nonce: {block["header"]["nonce"]}')
+    print(f'block #{block_chain.index(block)+1} ({len(block["transactions"])} transactions)\n'
+          f' | last hash:   {block["header"]["previous_hash"]}\n'
+          f' | hash:        {block["hash"]}\n'
+          f' | nonce:       {block["header"]["nonce"]}\n'
+          f' | merkle root: {block["header"]["merkle_root"]}\n'
+          f'================================================================================')
 
 
 def get_merkle_root(transactions):
@@ -82,7 +93,7 @@ def insert_test_transactions(n):
 
 
 def validate():
-    last_hash = 'root'
+    last_hash = '0000000000000000000000000000000000000000000000000000000000000000'
     for block in block_chain:
         merkle_root = get_merkle_root(block['transactions'])
         if merkle_root != block['header']['merkle_root']:
@@ -96,40 +107,19 @@ def validate():
         }
         block_hash = sha256(json.dumps(temporary_header).encode()).hexdigest()
         if block_hash != block['hash']:
-            raise Exception(f'Block hash has been tampered! {block_hash} != {block["hash"]}')
+            raise Exception(f'Block #{block_chain.index(block)+1} hash has been tampered! {block_hash} != {block["hash"]}')
         last_hash = block['hash']
     print('Blockchain is valid')
 
 
-def create_test_chain():
+def create_test_chain(size):
     insert_test_transactions(1)
     mine()
-
-    insert_test_transactions(50)
-    mine()
-
-    insert_test_transactions(500)
-    mine()
-
-    insert_test_transactions(1000)
-    mine()
-
-    insert_test_transactions(5000)
-    mine()
-
-
-def find_new_hash(block):
-    for nonce in range(MAX_NONCE):
-        block['header']['nonce'] = nonce
-        current_hash = sha256(json.dumps(block['header']).encode()).hexdigest()
-        if current_hash.startswith('0'*difficulty):
-            break
-    else:
-        raise Exception('Unable to find nonce')
-
-    block['hash'] = current_hash
+    for _ in range(size-1):
+        insert_test_transactions(randint(50, 5000))
+        mine()
 
 
 if __name__ == '__main__':
-    create_test_chain()
+    create_test_chain(10)
     validate()
